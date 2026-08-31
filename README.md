@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
@@ -76,3 +77,7 @@ export default defineConfig([
 ])
 
 ```
+=======
+# BucketList-Tracker
+this is a bucket list tracker serverless backend and also fully deployed in aws cloud.
+>>>>>>> 4df36002ec03333b134e0ce84017a509987c9d7f
