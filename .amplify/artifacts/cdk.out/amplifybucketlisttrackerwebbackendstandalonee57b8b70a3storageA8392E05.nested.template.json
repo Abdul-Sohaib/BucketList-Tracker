@@ -1,0 +1,637 @@
+{
+ "Description": "{\"createdOn\":\"Windows\",\"createdBy\":\"AmplifyStandalone\",\"createdWith\":\"1.6.0\",\"stackType\":\"storage-S3\",\"metadata\":{}}",
+ "Resources": {
+  "bucketListImagesBucket462B6946": {
+   "Type": "AWS::S3::Bucket",
+   "Properties": {
+    "CorsConfiguration": {
+     "CorsRules": [
+      {
+       "AllowedHeaders": [
+        "*"
+       ],
+       "AllowedMethods": [
+        "GET",
+        "HEAD",
+        "PUT",
+        "POST",
+        "DELETE"
+       ],
+       "AllowedOrigins": [
+        "*"
+       ],
+       "ExposedHeaders": [
+        "x-amz-server-side-encryption",
+        "x-amz-request-id",
+        "x-amz-id-2",
+        "ETag"
+       ],
+       "MaxAge": 3000
+      }
+     ]
+    },
+    "Tags": [
+     {
+      "Key": "amplify:branch-name",
+      "Value": "backend"
+     },
+     {
+      "Key": "amplify:deployment-type",
+      "Value": "standalone"
+     },
+     {
+      "Key": "amplify:friendly-name",
+      "Value": "bucketListImages"
+     },
+     {
+      "Key": "aws-cdk:auto-delete-objects",
+      "Value": "true"
+     },
+     {
+      "Key": "created-by",
+      "Value": "amplify"
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "amplify-bucketlisttrackerweb-backend-standalone-e57b8b70a3/storage/bucketListImages/Bucket/Resource"
+   }
+  },
+  "bucketListImagesBucketPolicy77163617": {
+   "Type": "AWS::S3::BucketPolicy",
+   "Properties": {
+    "Bucket": {
+     "Ref": "bucketListImagesBucket462B6946"
+    },
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "s3:*",
+       "Condition": {
+        "Bool": {
+         "aws:SecureTransport": "false"
+        }
+       },
+       "Effect": "Deny",
+       "Principal": {
+        "AWS": "*"
+       },
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "bucketListImagesBucket462B6946",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "bucketListImagesBucket462B6946",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "s3:PutBucketPolicy",
+        "s3:GetBucket*",
+        "s3:List*",
+        "s3:DeleteObject*"
+       ],
+       "Effect": "Allow",
+       "Principal": {
+        "AWS": {
+         "Fn::GetAtt": [
+          "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+          "Arn"
+         ]
+        }
+       },
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "bucketListImagesBucket462B6946",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "bucketListImagesBucket462B6946",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-bucketlisttrackerweb-backend-standalone-e57b8b70a3/storage/bucketListImages/Bucket/Policy/Resource"
+   }
+  },
+  "bucketListImagesBucketAutoDeleteObjectsCustomResource92F1CA73": {
+   "Type": "Custom::S3AutoDeleteObjects",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F",
+      "Arn"
+     ]
+    },
+    "BucketName": {
+     "Ref": "bucketListImagesBucket462B6946"
+    }
+   },
+   "DependsOn": [
+    "bucketListImagesBucketPolicy77163617"
+   ],
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "amplify-bucketlisttrackerweb-backend-standalone-e57b8b70a3/storage/bucketListImages/Bucket/AutoDeleteObjectsCustomResource/Default"
+   }
+  },
+  "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Version": "2012-10-17",
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ]
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-bucketlisttrackerweb-backend-standalone-e57b8b70a3/storage/Custom::S3AutoDeleteObjectsCustomResourceProvider/Role"
+   }
+  },
+  "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
+     },
+     "S3Key": "faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6.zip"
+    },
+    "Timeout": 900,
+    "MemorySize": 128,
+    "Handler": "index.handler",
+    "Role": {
+     "Fn::GetAtt": [
+      "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs24.x",
+    "Description": {
+     "Fn::Join": [
+      "",
+      [
+       "Lambda function for auto-deleting objects in ",
+       {
+        "Ref": "bucketListImagesBucket462B6946"
+       },
+       " S3 bucket."
+      ]
+     ]
+    }
+   },
+   "DependsOn": [
+    "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "amplify-bucketlisttrackerweb-backend-standalone-e57b8b70a3/storage/Custom::S3AutoDeleteObjectsCustomResourceProvider/Handler",
+    "aws:asset:path": "asset.faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6",
+    "aws:asset:property": "Code"
+   }
+  },
+  "BUCKETLISTIMAGESBUCKETNAMEParameter3E231195": {
+   "Type": "AWS::SSM::Parameter",
+   "Properties": {
+    "Name": "/amplify/resource_reference/bucketlisttrackerweb/backend-standalone-e57b8b70a3/BUCKET_LIST_IMAGES_BUCKET_NAME",
+    "Tags": {
+     "amplify:branch-name": "backend",
+     "amplify:deployment-type": "standalone",
+     "created-by": "amplify"
+    },
+    "Type": "String",
+    "Value": {
+     "Ref": "bucketListImagesBucket462B6946"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-bucketlisttrackerweb-backend-standalone-e57b8b70a3/storage/BUCKET_LIST_IMAGES_BUCKET_NAMEParameter/Resource"
+   }
+  },
+  "amplifybucketlisttrackerwebbackendstandalonee57b8b70a3storageAccess3BDC4DAAF": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "s3:GetObject",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          {
+           "Fn::GetAtt": [
+            "bucketListImagesBucket462B6946",
+            "Arn"
+           ]
+          },
+          "/bucket-list-images/${cognito-identity.amazonaws.com:sub}/*"
+         ]
+        ]
+       }
+      },
+      {
+       "Action": "s3:ListBucket",
+       "Condition": {
+        "StringLike": {
+         "s3:prefix": [
+          "bucket-list-images/${cognito-identity.amazonaws.com:sub}/*",
+          "bucket-list-images/${cognito-identity.amazonaws.com:sub}/"
+         ]
+        }
+       },
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "bucketListImagesBucket462B6946",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": "s3:PutObject",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          {
+           "Fn::GetAtt": [
+            "bucketListImagesBucket462B6946",
+            "Arn"
+           ]
+          },
+          "/bucket-list-images/${cognito-identity.amazonaws.com:sub}/*"
+         ]
+        ]
+       }
+      },
+      {
+       "Action": "s3:DeleteObject",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          {
+           "Fn::GetAtt": [
+            "bucketListImagesBucket462B6946",
+            "Arn"
+           ]
+          },
+          "/bucket-list-images/${cognito-identity.amazonaws.com:sub}/*"
+         ]
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "amplifybucketlisttrackerwebbackendstandalonee57b8b70a3storageAccess3BDC4DAAF",
+    "Roles": [
+     {
+      "Ref": "referencetoamplifybucketlisttrackerwebbackendstandalonee57b8b70a3authNestedStackauthNestedStackResourceABE6DAB3Outputsamplifybucketlisttrackerwebbackendstandalonee57b8b70a3authamplifyAuthauthenticatedUserRole0904B314Ref"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-bucketlisttrackerweb-backend-standalone-e57b8b70a3/storage/amplify-bucketlisttrackerweb-backend-standalone-e57b8b70a3--storageAccess3/Resource"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/5WNTUvEMBCGf8v2nI7agoi33fWsZXsUkWw6lmmbBDLT/SDkv0s3YPXoad7heT8qqB6f4H6jz1yabiwnOkJ8RRbsWtFmVPrMn5FriLvZjChq/+Wyeo+FpQu54rn4HV78XMMNMWTrdhb/ghMKvh0HNMJF+lAZNX4ic11b8/+P7hxoRQtadLfqpJgtxFYCub7RQVsUDMvGz5MUaQtxXc8qJbWfWbw9IPs5GFzQqv+gJvgTdRh2mlFtmVFa0T25PinnO4SB705VBVUND5uBicowOyGLcMj3GwEk5yh6AQAA"
+   },
+   "Metadata": {
+    "aws:cdk:path": "amplify-bucketlisttrackerweb-backend-standalone-e57b8b70a3/storage/CDKMetadata/Default"
+   },
+   "Condition": "CDKMetadataAvailable"
+  }
+ },
+ "Conditions": {
+  "CDKMetadataAvailable": {
+   "Fn::Or": [
+    {
+     "Fn::Or": [
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "af-south-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-east-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-northeast-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-northeast-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-northeast-3"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-south-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-south-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-southeast-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-southeast-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-southeast-3"
+       ]
+      }
+     ]
+    },
+    {
+     "Fn::Or": [
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-southeast-4"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ca-central-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ca-west-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "cn-north-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "cn-northwest-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-central-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-central-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-north-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-south-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-south-2"
+       ]
+      }
+     ]
+    },
+    {
+     "Fn::Or": [
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-west-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-west-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-west-3"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "il-central-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "me-central-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "me-south-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "sa-east-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "us-east-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "us-east-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "us-west-1"
+       ]
+      }
+     ]
+    },
+    {
+     "Fn::Equals": [
+      {
+       "Ref": "AWS::Region"
+      },
+      "us-west-2"
+     ]
+    }
+   ]
+  }
+ },
+ "Parameters": {
+  "referencetoamplifybucketlisttrackerwebbackendstandalonee57b8b70a3authNestedStackauthNestedStackResourceABE6DAB3Outputsamplifybucketlisttrackerwebbackendstandalonee57b8b70a3authamplifyAuthauthenticatedUserRole0904B314Ref": {
+   "Type": "String"
+  }
+ },
+ "Outputs": {
+  "amplifybucketlisttrackerwebbackendstandalonee57b8b70a3storagebucketListImagesBucket6D2172B7Ref": {
+   "Value": {
+    "Ref": "bucketListImagesBucket462B6946"
+   }
+  }
+ }
+}

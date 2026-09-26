@@ -1,7 +1,16 @@
 import { useState, useEffect } from 'react';
 import './App.css';
+
 import type { User } from './types/bucket';
+
+import {
+  getCurrentUser,
+  fetchUserAttributes,
+  signOut,
+} from 'aws-amplify/auth';
+
 import { useBucketList } from './hooks/useBucketList';
+
 import Navbar from './components/Navbar';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -9,15 +18,16 @@ import CreateBucket from './pages/CreateBucket';
 import EditBucket from './pages/EditBucket';
 import Profile from './pages/Profile';
 
-const SESSION_KEY = 'bucketlist_tracker_user_session';
-
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [currentRoute, setCurrentRoute] = useState<string>('login');
   const [editId, setEditId] = useState<string | null>(null);
-  const [sessionLoading, setSessionLoading] = useState<boolean>(true);
+  const [sessionLoading, setSessionLoading] = useState(true);
 
-  // Core bucket list hook
+  // --------------------------------------------------
+  // Bucket List
+  // --------------------------------------------------
+
   const {
     items,
     loading: itemsLoading,
@@ -25,90 +35,197 @@ function App() {
     updateBucketItem,
     deleteBucketItem,
     toggleComplete,
-  } = useBucketList();
+  } = useBucketList(user !== null && !sessionLoading);
 
-  // Load user session on mount
+  // --------------------------------------------------
+  // Restore Cognito Session
+  // --------------------------------------------------
+
   useEffect(() => {
-    try {
-      const savedSession = localStorage.getItem(SESSION_KEY);
-      if (savedSession) {
-        setUser(JSON.parse(savedSession));
+    const restoreSession = async () => {
+      try {
+        const currentUser = await getCurrentUser();
+        console.log('User still signed in:', currentUser);
+
+        let attributes: Record<string, string | undefined> = {};
+
+        try {
+          attributes = await fetchUserAttributes();
+        } catch (attrError) {
+          console.warn(
+            'Could not fetch user attributes on session restore:',
+            attrError
+          );
+        }
+
+        const email =
+          attributes.email ??
+          currentUser.signInDetails?.loginId ??
+          '';
+
+        const preferred_username =
+          attributes.preferred_username ?? '';
+
+        const username =
+          preferred_username ||
+          (email
+            ? email.split('@')[0]
+            : 'Explorer');
+
+        const restoredUser: User = {
+          email,
+          username,
+          preferred_username,
+          bio: 'Explorer of life, collector of experiences. Let\'s check off this list!',
+          joinedDate: new Date()
+            .toISOString()
+            .split('T')[0],
+          avatarUrl:
+            'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&h=150&q=80',
+        };
+
+        setUser(restoredUser);
+      } catch (authError) {
+        console.log('No user signed in');
+        setUser(null);
+      } finally {
+        setSessionLoading(false);
       }
-    } catch (e) {
-      console.error('Error loading session', e);
-    } finally {
-      setSessionLoading(false);
-    }
+    };
+
+    restoreSession();
   }, []);
 
-  // Sync state router with URL Hash navigation
+  // --------------------------------------------------
+  // Hash Router
+  // --------------------------------------------------
+
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash;
-      
-      // If not logged in, redirect to login page regardless of hash
-      if (!user && !sessionLoading) {
+
+      // Don't redirect or change routes while session is verifying
+      if (sessionLoading) return;
+
+      // Not authenticated
+      if (!user) {
         setCurrentRoute('login');
+
+        if (hash !== '#login') {
+          window.location.hash = 'login';
+        }
+
         return;
       }
 
-      if (user) {
-        if (hash === '#create') {
-          setCurrentRoute('create');
-        } else if (hash === '#profile') {
-          setCurrentRoute('profile');
-        } else if (hash.startsWith('#edit/')) {
-          const id = hash.replace('#edit/', '');
-          setEditId(id);
-          setCurrentRoute('edit');
-        } else {
-          // Default fallback
-          setCurrentRoute('dashboard');
+      // Authenticated
+      if (hash === '#create') {
+        setCurrentRoute('create');
+      } else if (hash === '#profile') {
+        setCurrentRoute('profile');
+      } else if (hash.startsWith('#edit/')) {
+        const id = hash.replace('#edit/', '');
+
+        setEditId(id);
+        setCurrentRoute('edit');
+      } else {
+        setCurrentRoute('dashboard');
+
+        if (
+          hash !== '#dashboard' &&
+          hash !== ''
+        ) {
           window.location.hash = 'dashboard';
         }
       }
     };
 
-    window.addEventListener('hashchange', handleHashChange);
-    // Call once initially when loading is finished
+    window.addEventListener(
+      'hashchange',
+      handleHashChange
+    );
+
     if (!sessionLoading) {
       handleHashChange();
     }
 
-    return () => window.removeEventListener('hashchange', handleHashChange);
+    return () => {
+      window.removeEventListener(
+        'hashchange',
+        handleHashChange
+      );
+    };
   }, [user, sessionLoading]);
 
-  // Login handlers
-  const handleLoginSuccess = (loggedInUser: User) => {
-    setUser(loggedInUser);
-    try {
-      localStorage.setItem(SESSION_KEY, JSON.stringify(loggedInUser));
-    } catch (e) {
-      console.error('Failed to save session', e);
+  // --------------------------------------------------
+  // Login Success
+  // --------------------------------------------------
+
+  const handleLoginSuccess = async (
+    loggedInUser: User
+  ) => {
+    let finalUser = { ...loggedInUser };
+
+    if (!finalUser.preferred_username) {
+      try {
+        const attributes =
+          await fetchUserAttributes();
+
+        if (attributes.preferred_username) {
+          finalUser = {
+            ...finalUser,
+            preferred_username:
+              attributes.preferred_username,
+            username:
+              attributes.preferred_username,
+          };
+        }
+      } catch (e) {
+        console.warn(
+          'Could not enrich user attributes in handleLoginSuccess:',
+          e
+        );
+      }
     }
+
+    setUser(finalUser);
+    setCurrentRoute('dashboard');
+
     window.location.hash = 'dashboard';
   };
 
-  const handleLogout = () => {
-    setUser(null);
+  // --------------------------------------------------
+  // Logout
+  // --------------------------------------------------
+
+  const handleLogout = async () => {
     try {
-      localStorage.removeItem(SESSION_KEY);
-    } catch (e) {
-      console.error('Failed to clear session', e);
+      await signOut();
+
+      setUser(null);
+      setEditId(null);
+      setCurrentRoute('login');
+
+      window.location.hash = 'login';
+    } catch (error) {
+      console.error('Logout failed:', error);
     }
-    window.location.hash = 'login';
   };
 
-  const handleUpdateProfile = (updatedUser: User) => {
+  // --------------------------------------------------
+  // Update Profile
+  // --------------------------------------------------
+
+  const handleUpdateProfile = (
+    updatedUser: User
+  ) => {
     setUser(updatedUser);
-    try {
-      localStorage.setItem(SESSION_KEY, JSON.stringify(updatedUser));
-    } catch (e) {
-      console.error('Failed to update session', e);
-    }
   };
 
-  // Nav routing change helper
+  // --------------------------------------------------
+  // Navigation
+  // --------------------------------------------------
+
   const setRoute = (route: string) => {
     if (route === 'dashboard') {
       window.location.hash = 'dashboard';
@@ -121,13 +238,21 @@ function App() {
     }
   };
 
+  // --------------------------------------------------
+  // Edit Bucket Item
+  // --------------------------------------------------
+
   const handleEditClick = (id: string) => {
     window.location.hash = `edit/${id}`;
   };
 
-  // Render proper subpage matching route state
+  // --------------------------------------------------
+  // Render Page
+  // --------------------------------------------------
+
   const renderPage = () => {
-    if (sessionLoading || itemsLoading) {
+    // Checking Cognito session
+    if (sessionLoading) {
       return (
         <div className="app-loading-container">
           <div className="app-spinner"></div>
@@ -135,8 +260,22 @@ function App() {
       );
     }
 
+    // Not authenticated
     if (!user) {
-      return <Login onLoginSuccess={handleLoginSuccess} />;
+      return (
+        <Login
+          onLoginSuccess={handleLoginSuccess}
+        />
+      );
+    }
+
+    // Bucket data loading
+    if (itemsLoading) {
+      return (
+        <div className="app-loading-container">
+          <div className="app-spinner"></div>
+        </div>
+      );
     }
 
     switch (currentRoute) {
@@ -150,8 +289,15 @@ function App() {
             setRoute={setRoute}
           />
         );
+
       case 'create':
-        return <CreateBucket onAddItem={addBucketItem} setRoute={setRoute} />;
+        return (
+          <CreateBucket
+            onAddItem={addBucketItem}
+            setRoute={setRoute}
+          />
+        );
+
       case 'edit':
         return (
           <EditBucket
@@ -161,14 +307,18 @@ function App() {
             setRoute={setRoute}
           />
         );
+
       case 'profile':
         return (
           <Profile
             user={user}
             items={items}
-            onUpdateProfile={handleUpdateProfile}
+            onUpdateProfile={
+              handleUpdateProfile
+            }
           />
         );
+
       default:
         return (
           <Dashboard
@@ -182,15 +332,34 @@ function App() {
     }
   };
 
+  // --------------------------------------------------
+  // Application UI
+  // --------------------------------------------------
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <Navbar
-        currentRoute={currentRoute}
-        setRoute={setRoute}
-        user={user}
-        onLogout={handleLogout}
-      />
-      <main style={{ flexGrow: 1, paddingTop: '20px' }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: '100vh',
+      }}
+    >
+      {/* Show Navbar only when logged in */}
+      {user && (
+        <Navbar
+          currentRoute={currentRoute}
+          setRoute={setRoute}
+          user={user}
+          onLogout={handleLogout}
+        />
+      )}
+
+      <main
+        style={{
+          flexGrow: 1,
+          paddingTop: user ? '20px' : '0',
+        }}
+      >
         {renderPage()}
       </main>
     </div>

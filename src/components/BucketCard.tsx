@@ -1,237 +1,399 @@
-import type { BucketItem } from '../types/bucket';
+import { useEffect, useState } from 'react';
+import type { BucketListItem } from '../types/bucket';
+import { getBucketImageUrl } from '../utils/storage';
 
 interface BucketCardProps {
-  item: BucketItem;
-  onToggleComplete: (id: string) => void;
-  onDelete: (id: string) => void;
+  item: BucketListItem;
+  onToggleComplete: (id: string) => Promise<boolean> | void;
   onEdit: (id: string) => void;
+  onDelete: (id: string) => Promise<boolean> | void;
 }
 
-export const getCategoryTheme = (category: string) => {
-  const cat = category.toLowerCase();
-  if (cat.includes('travel') || cat.includes('trip') || cat.includes('visit') || cat.includes('world') || cat.includes('place')) {
-    return {
-      bg: 'rgba(129, 140, 248, 0.1)',
-      color: '#818cf8',
-      icon: (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="10" />
-          <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-        </svg>
-      )
-    };
-  }
-  if (cat.includes('adventure') || cat.includes('sport') || cat.includes('outdoor') || cat.includes('climb') || cat.includes('sky')) {
-    return {
-      bg: 'rgba(251, 191, 36, 0.1)',
-      color: '#fbbf24',
-      icon: (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M17 11l-5-5-5 5M17 18l-5-5-5 5" />
-        </svg>
-      )
-    };
-  }
-  if (cat.includes('learn') || cat.includes('edu') || cat.includes('book') || cat.includes('skill') || cat.includes('career') || cat.includes('code') || cat.includes('study')) {
-    return {
-      bg: 'rgba(56, 189, 248, 0.1)',
-      color: '#38bdf8',
-      icon: (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-        </svg>
-      )
-    };
-  }
-  if (cat.includes('health') || cat.includes('fit') || cat.includes('gym') || cat.includes('run') || cat.includes('diet')) {
-    return {
-      bg: 'rgba(52, 211, 153, 0.1)',
-      color: '#34d399',
-      icon: (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-        </svg>
-      )
-    };
-  }
-  if (cat.includes('creative') || cat.includes('art') || cat.includes('music') || cat.includes('paint') || cat.includes('write')) {
-    return {
-      bg: 'rgba(244, 114, 182, 0.1)',
-      color: '#f472b6',
-      icon: (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 14.7255 3.09032 17.1962 4.85857 19C5.03459 19.176 5.109 19.4239 5.04566 19.667C4.9458 20.0504 4.85338 20.449 4.77884 20.8601C4.70889 21.246 4.96541 21.603 5.34758 21.6706C6.73274 21.9157 8.16362 21.6669 9.5 21" />
-        </svg>
-      )
-    };
-  }
-  if (cat.includes('finance') || cat.includes('money') || cat.includes('buy') || cat.includes('invest') || cat.includes('save') || cat.includes('house')) {
-    return {
-      bg: 'rgba(52, 211, 153, 0.1)',
-      color: '#34d399',
-      icon: (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="12" y1="1" x2="12" y2="23" />
-          <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-        </svg>
-      )
-    };
-  }
-  // Default
-  return {
-    bg: 'rgba(156, 163, 175, 0.1)',
-    color: '#9ca3af',
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-        <polyline points="22 4 12 14.01 9 11.01" />
-      </svg>
-    )
-  };
-};
+function BucketCard({
+  item,
+  onToggleComplete,
+  onEdit,
+  onDelete,
+}: BucketCardProps) {
+  const [imageUrl, setImageUrl] = useState<string>('');
+  const [imageLoading, setImageLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [toggling, setToggling] = useState(false);
 
-export default function BucketCard({ item, onToggleComplete, onDelete, onEdit }: BucketCardProps) {
-  const theme = getCategoryTheme(item.category);
+  useEffect(() => {
+    let cancelled = false;
 
-  // Days remaining calculation
-  const getDaysRemainingText = () => {
-    if (item.completed) return 'Accomplished!';
-    
-    const target = new Date(item.targetDate);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const diffTime = target.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays < 0) {
-      return `Overdue by ${Math.abs(diffDays)} day${Math.abs(diffDays) > 1 ? 's' : ''}`;
+    const loadImage = async () => {
+      if (!item.imageKey) {
+        setImageUrl('');
+        return;
+      }
+
+      try {
+        setImageLoading(true);
+        const url = await getBucketImageUrl(item.imageKey);
+
+        if (!cancelled) {
+          setImageUrl(url);
+        }
+      } catch (error) {
+        console.error('Failed to load bucket image:', error);
+        if (!cancelled) {
+          setImageUrl('');
+        }
+      } finally {
+        if (!cancelled) {
+          setImageLoading(false);
+        }
+      }
+    };
+
+    loadImage();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [item.imageKey]);
+
+  const handleToggle = async () => {
+    if (toggling) return;
+    try {
+      setToggling(true);
+      await onToggleComplete(item.id);
+    } finally {
+      setToggling(false);
     }
-    if (diffDays === 0) return 'Today!';
-    if (diffDays === 1) return 'Tomorrow';
-    
-    if (diffDays > 365) {
-      const years = (diffDays / 365).toFixed(1);
-      return `~${years} years left`;
-    }
-    
-    return `${diffDays} days left`;
   };
 
-  const isOverdue = !item.completed && new Date(item.targetDate) < new Date(new Date().setHours(0,0,0,0));
+  const handleDelete = async () => {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${item.title}"?`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      await onDelete(item.id);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // Format human-friendly target date
+  const formatDisplayDate = (dateStr?: string) => {
+    if (!dateStr) return null;
+    try {
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        const dateObj = new Date(
+          parseInt(parts[0], 10),
+          parseInt(parts[1], 10) - 1,
+          parseInt(parts[2], 10)
+        );
+        return dateObj.toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        });
+      }
+      return dateStr;
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const formattedDate = formatDisplayDate(item.targetDate);
+  const isOverdue =
+    !item.completed &&
+    item.targetDate &&
+    new Date(item.targetDate).getTime() < new Date().setHours(0, 0, 0, 0);
+
+  const priorityKey = (item.priority || 'MEDIUM').toLowerCase();
 
   return (
-    <div
-      className={`glass-panel card-container ${item.completed ? 'card-completed-border' : ''}`}
+    <article
+      className={`card-container ${
+        item.completed ? 'card-completed-border' : ''
+      }`}
     >
-      {/* Header Badges */}
-      <div className="card-header">
-        <span
-          className="card-category-badge"
-          style={{
-            backgroundColor: theme.bg,
-            color: theme.color,
-          }}
-        >
-          {theme.icon}
-          {item.category}
-        </span>
+      {/* Cover Media Section */}
+      <div className="card-media-wrap">
+        {imageLoading ? (
+          <div className="card-media-placeholder">
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="loader-spinner"
+              style={{ width: '24px', height: '24px' }}
+            >
+              <circle cx="12" cy="12" r="10" opacity="0.25" />
+              <path d="M12 2a10 10 0 0 1 10 10" />
+            </svg>
+            <span>Loading image...</span>
+          </div>
+        ) : imageUrl ? (
+          <>
+            <img
+              src={imageUrl}
+              alt={item.title}
+              className="card-media-img"
+              loading="lazy"
+            />
+            <div className="card-media-overlay" />
+          </>
+        ) : (
+          <div className="card-media-placeholder">
+            <svg
+              width="36"
+              height="36"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polygon points="3 11 22 2 13 21 11 13 3 11" />
+            </svg>
+            <span>{item.category || 'Bucket List Goal'}</span>
+          </div>
+        )}
 
-        <span className={`badge badge-${item.priority.toLowerCase()}`}>
-          {item.priority}
-        </span>
+        {/* Floating Top Badges */}
+        <div className="card-floating-badges">
+          {item.category ? (
+            <span className="card-category-badge">
+              <svg
+                width="11"
+                height="11"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+                <line x1="7" y1="7" x2="7.01" y2="7" />
+              </svg>
+              {item.category}
+            </span>
+          ) : (
+            <span />
+          )}
+
+          <span className={`card-priority-badge ${priorityKey}`}>
+            {item.priority || 'MEDIUM'}
+          </span>
+        </div>
       </div>
 
-      {/* Title & Info Checkbox */}
-      <div className="card-title-section">
-        <label className="card-checkbox-container">
-          <input
-            type="checkbox"
-            checked={item.completed}
-            onChange={() => onToggleComplete(item.id)}
-            className="card-checkbox-input"
-          />
-          <span
-            className={`card-checkmark ${item.completed ? 'card-checkmark-checked' : ''}`}
+      {/* Card Body */}
+      <div className="card-body">
+        {/* Title row with 1-click checkbox */}
+        <div className="card-title-row">
+          <button
+            type="button"
+            className={`card-check-toggle ${item.completed ? 'checked' : ''}`}
+            onClick={handleToggle}
+            title={item.completed ? 'Mark incomplete' : 'Mark completed'}
+            aria-label={
+              item.completed
+                ? `Mark ${item.title} incomplete`
+                : `Mark ${item.title} complete`
+            }
+            disabled={toggling}
           >
             {item.completed && (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4">
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#ffffff"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             )}
-          </span>
-        </label>
+          </button>
 
-        <h3
-          className={`card-title ${item.completed ? 'card-completed-title' : ''}`}
-        >
-          {item.title}
-        </h3>
-      </div>
-
-      {/* Description */}
-      <p
-        className={`card-description ${item.completed ? 'card-completed-text' : ''}`}
-      >
-        {item.description}
-      </p>
-
-      {/* Footer Meta */}
-      <div className="card-footer">
-        <div className="card-meta-item">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-            <line x1="16" y1="2" x2="16" y2="6" />
-            <line x1="8" y1="2" x2="8" y2="6" />
-            <line x1="3" y1="10" x2="21" y2="10" />
-          </svg>
-          <span>{item.targetDate}</span>
+          <h3
+            className={`card-title ${
+              item.completed ? 'card-completed-title' : ''
+            }`}
+          >
+            {item.title}
+          </h3>
         </div>
 
-        <span
-          className="card-meta-item"
-          style={{
-            color: item.completed ? 'var(--color-success)' : isOverdue ? 'var(--color-accent)' : 'var(--text-secondary)',
-            fontWeight: '600',
-          }}
-        >
-          {getDaysRemainingText()}
-        </span>
+        {/* Description */}
+        {item.description ? (
+          <p
+            className={`card-description ${
+              item.completed ? 'card-completed-text' : ''
+            }`}
+          >
+            {item.description}
+          </p>
+        ) : (
+          <div style={{ flexGrow: 1 }} />
+        )}
+
+        {/* Meta row: Date and status */}
+        <div className="card-meta-row">
+          {formattedDate ? (
+            <div
+              className={`card-meta-item ${
+                isOverdue ? 'card-meta-date-overdue' : ''
+              }`}
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                <line x1="16" y1="2" x2="16" y2="6" />
+                <line x1="8" y1="2" x2="8" y2="6" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+              </svg>
+              <span>
+                {isOverdue ? `Overdue (${formattedDate})` : formattedDate}
+              </span>
+            </div>
+          ) : (
+            <div />
+          )}
+
+          {item.completed && (
+            <span className="card-status-pill">
+              <svg
+                width="11"
+                height="11"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              Achieved
+            </span>
+          )}
+        </div>
+
+        {/* Action Toolbar */}
+        <div className="card-footer">
+          <button
+            type="button"
+            onClick={handleToggle}
+            disabled={toggling}
+            className={`card-action-btn complete-toggle ${
+              item.completed ? 'is-completed' : ''
+            }`}
+          >
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+            <span>{item.completed ? 'Completed' : 'Mark Done'}</span>
+          </button>
+
+          <div className="card-actions-group">
+            <button
+              type="button"
+              onClick={() => onEdit(item.id)}
+              className="card-action-btn"
+              title="Edit item"
+            >
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+              <span>Edit</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={deleting}
+              className="card-delete-btn"
+              title="Delete item"
+              aria-label={`Delete ${item.title}`}
+            >
+              {deleting ? (
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  className="loader-spinner"
+                  style={{ width: '14px', height: '14px' }}
+                >
+                  <circle cx="12" cy="12" r="10" opacity="0.25" />
+                  <path d="M12 2a10 10 0 0 1 10 10" />
+                </svg>
+              ) : (
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  <line x1="10" y1="11" x2="10" y2="17" />
+                  <line x1="14" y1="11" x2="14" y2="17" />
+                </svg>
+              )}
+            </button>
+          </div>
+        </div>
       </div>
-
-      {/* Divider */}
-      <hr style={{ border: 'none', borderTop: '1px solid rgba(255, 255, 255, 0.04)', margin: '16px 0' }} />
-
-      {/* Action Buttons */}
-      <div className="card-actions">
-        <button
-          className="btn btn-secondary card-action-btn"
-          onClick={() => onEdit(item.id)}
-          title="Edit Dream"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-            <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-          </svg>
-          Edit
-        </button>
-
-        <button
-          className="btn btn-danger card-action-btn card-delete-btn"
-          onClick={() => onDelete(item.id)}
-          style={{ marginLeft: 'auto' }}
-          title="Delete Dream"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="3 6 5 6 21 6" />
-            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-            <line x1="10" y1="11" x2="10" y2="17" />
-            <line x1="14" y1="11" x2="14" y2="17" />
-          </svg>
-          Delete
-        </button>
-      </div>
-    </div>
+    </article>
   );
 }
+
+export default BucketCard;

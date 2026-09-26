@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { User, BucketItem } from '../types/bucket';
+import { updateUserAttributes, fetchUserAttributes } from 'aws-amplify/auth';
 
 interface ProfileProps {
   user: User | null;
@@ -15,14 +16,69 @@ const AVATAR_OPTIONS = [
   'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&h=150&q=80', // Adventurer Male
 ];
 
+// Helper to extract a friendly display name (never showing raw Cognito UUIDs)
+const getCleanDisplayName = (u: User | null): string => {
+  if (!u) return '';
+  if (u.preferred_username && u.preferred_username.trim()) {
+    return u.preferred_username.trim();
+  }
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(u.username || '');
+  if (u.username && !isUuid) {
+    return u.username.trim();
+  }
+  if (u.email) {
+    return u.email.split('@')[0];
+  }
+  return 'Explorer';
+};
+
 export default function Profile({ user, items, onUpdateProfile }: ProfileProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const [username, setUsername] = useState(user?.username || '');
+  const [username, setUsername] = useState(getCleanDisplayName(user));
   const [bio, setBio] = useState(user?.bio || '');
   const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl || AVATAR_OPTIONS[0]);
   const [error, setError] = useState('');
 
+  // Keep state in sync whenever user prop changes
+  useEffect(() => {
+    if (user) {
+      setUsername(getCleanDisplayName(user));
+      setBio(user.bio || '');
+      setAvatarUrl(user.avatarUrl || AVATAR_OPTIONS[0]);
+    }
+  }, [user]);
+
+  // Query Cognito attributes directly on component mount to guarantee latest preferred_username
+  useEffect(() => {
+    let isMounted = true;
+    const loadAttributes = async () => {
+      try {
+        const attrs = await fetchUserAttributes();
+        if (isMounted && attrs.preferred_username) {
+          const pref = attrs.preferred_username.trim();
+          setUsername(pref);
+          if (user && user.preferred_username !== pref) {
+            onUpdateProfile({
+              ...user,
+              preferred_username: pref,
+              username: pref,
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Could not load Cognito user attributes in Profile:', err);
+      }
+    };
+
+    loadAttributes();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   if (!user) return null;
+
+  const displayName = getCleanDisplayName(user);
 
   // Derive stats
   const total = items.length;
@@ -39,27 +95,43 @@ export default function Profile({ user, items, onUpdateProfile }: ProfileProps) 
   let primaryFocus = 'None';
   let maxCount = 0;
   Object.entries(categoryCounts).forEach(([cat, count]) => {
-    if (count > maxCount) {
-      maxCount = count;
+    const num = typeof count === 'number' ? count : Number(count) || 0;
+    if (num > maxCount) {
+      maxCount = num;
       primaryFocus = cat;
     }
   });
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim()) {
       setError('Username is required.');
       return;
     }
 
-    onUpdateProfile({
-      ...user,
-      username: username.trim(),
-      bio: bio.trim(),
-      avatarUrl,
-    });
-    setIsEditing(false);
-    setError('');
+    try {
+      try {
+        await updateUserAttributes({
+          userAttributes: {
+            preferred_username: username.trim(),
+          },
+        });
+      } catch (err) {
+        console.warn('Could not update preferred_username in Cognito:', err);
+      }
+
+      onUpdateProfile({
+        ...user,
+        username: username.trim(),
+        preferred_username: username.trim(),
+        bio: bio.trim(),
+        avatarUrl,
+      });
+      setIsEditing(false);
+      setError('');
+    } catch (err: any) {
+      setError(err?.message || 'Failed to save changes.');
+    }
   };
 
   return (
@@ -73,8 +145,8 @@ export default function Profile({ user, items, onUpdateProfile }: ProfileProps) 
             {!isEditing ? (
               // Normal View Mode
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', width: '100%' }}>
-                <img src={user.avatarUrl} alt={user.username} className="profile-large-avatar" />
-                <h2 className="profile-name">{user.username}</h2>
+                <img src={user.avatarUrl} alt={displayName} className="profile-large-avatar" />
+                <h2 className="profile-name">{displayName}</h2>
                 <span className="profile-email">{user.email}</span>
                 <span className="profile-joined">Member since {user.joinedDate}</span>
                 
@@ -85,7 +157,12 @@ export default function Profile({ user, items, onUpdateProfile }: ProfileProps) 
                 
                 <button 
                   className="btn btn-secondary profile-edit-btn" 
-                  onClick={() => setIsEditing(true)}
+                  onClick={() => {
+                    setUsername(getCleanDisplayName(user));
+                    setBio(user.bio);
+                    setAvatarUrl(user.avatarUrl);
+                    setIsEditing(true);
+                  }}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
@@ -146,7 +223,7 @@ export default function Profile({ user, items, onUpdateProfile }: ProfileProps) 
                     className="btn btn-secondary profile-form-btn" 
                     onClick={() => {
                       setIsEditing(false);
-                      setUsername(user.username);
+                      setUsername(getCleanDisplayName(user));
                       setBio(user.bio);
                       setAvatarUrl(user.avatarUrl);
                       setError('');

@@ -1,0 +1,11 @@
+type BucketListItem @model @auth(rules: [{allow: owner, ownerField: "owner"}])
+{
+  title: String!
+  description: String
+  category: String
+  priority: String
+  targetDate: String
+  imageKey: String
+  completed: Boolean @default(value: "false")
+  createdAt: AWSDateTime
+}

@@ -8,10 +8,27 @@ interface NavbarProps {
   onLogout: () => void;
 }
 
+const getCleanDisplayName = (u: User | null): string => {
+  if (!u) return '';
+  if (u.preferred_username && u.preferred_username.trim()) {
+    return u.preferred_username.trim();
+  }
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(u.username || '');
+  if (u.username && !isUuid) {
+    return u.username.trim();
+  }
+  if (u.email) {
+    return u.email.split('@')[0];
+  }
+  return 'Explorer';
+};
+
 export default function Navbar({ currentRoute, setRoute, user, onLogout }: NavbarProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   if (!user) return null; // Don't show navbar if user is not logged in
+
+  const displayName = getCleanDisplayName(user);
 
   const handleNavClick = (e: React.MouseEvent, route: string) => {
     e.preventDefault();
@@ -79,10 +96,10 @@ export default function Navbar({ currentRoute, setRoute, user, onLogout }: Navba
           <div className="navbar-user-info" onClick={(e) => handleNavClick(e, 'profile')}>
             <img
               src={user.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&h=100&q=80'}
-              alt={user.username}
+              alt={displayName}
               className="navbar-avatar"
             />
-            <span className="navbar-username">{user.username}</span>
+            <span className="navbar-username">{displayName}</span>
           </div>
 
           <button
