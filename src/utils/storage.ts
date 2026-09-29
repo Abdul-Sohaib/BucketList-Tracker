@@ -3,6 +3,7 @@ import {
     getUrl,
     remove,
 } from 'aws-amplify/storage';
+import { v4 as uuidv4 } from 'uuid';  // use uuid library
 
 /**
  * Upload a bucket-list image to S3.
@@ -13,7 +14,8 @@ export async function uploadBucketImage(file: File): Promise<string> {
     const extension =
         file.name.split('.').pop()?.toLowerCase() || 'jpg';
 
-    const fileName = `${crypto.randomUUID()}.${extension}`;
+    // UUID generation
+    const fileName = `${uuidv4()}.${extension}`;
     const key = `bucket-list-images/${fileName}`;
 
     const result = await uploadData({

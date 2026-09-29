@@ -12,6 +12,7 @@ import {
 import { useBucketList } from './hooks/useBucketList';
 
 import Navbar from './components/Navbar';
+import LoadingSpinner from './components/LoadingSpinner';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import CreateBucket from './pages/CreateBucket';
@@ -254,9 +255,11 @@ function App() {
     // Checking Cognito session
     if (sessionLoading) {
       return (
-        <div className="app-loading-container">
-          <div className="app-spinner"></div>
-        </div>
+        <LoadingSpinner
+          fullScreen={true}
+          message="Verifying your account session..."
+          submessage="Connecting to DreamQuest secure vault."
+        />
       );
     }
 
@@ -272,9 +275,10 @@ function App() {
     // Bucket data loading
     if (itemsLoading) {
       return (
-        <div className="app-loading-container">
-          <div className="app-spinner"></div>
-        </div>
+        <LoadingSpinner
+          fullScreen={false}
+          submessage="Retrieving your life goals and achievements."
+        />
       );
     }
 

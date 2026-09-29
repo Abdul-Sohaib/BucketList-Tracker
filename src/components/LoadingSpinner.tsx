@@ -1,49 +1,117 @@
+import { useState, useEffect } from 'react';
 
-export default function LoadingSpinner() {
-  return (
-    <div style={styles.container}>
-      <div style={styles.spinner}></div>
-      <p style={styles.text}>Loading items...</p>
-    </div>
-  );
+interface LoadingSpinnerProps {
+  fullScreen?: boolean;
+  message?: string;
+  submessage?: string;
+  compact?: boolean;
 }
 
-const styles = {
-  container: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '40px',
-    gap: '16px',
-  },
-  spinner: {
-    width: '40px',
-    height: '40px',
-    border: '3px solid rgba(99, 102, 241, 0.1)',
-    borderTop: '3px solid #6366f1',
-    borderRadius: '50%',
-    animation: 'spin 1s linear infinite',
-  },
-  text: {
-    color: '#9ca3af',
-    fontSize: '0.9rem',
-    fontFamily: 'Outfit, sans-serif',
-  }
-};
+const DYNAMIC_MESSAGES = [
+  'Gathering your life aspirations...',
+  'Connecting to your personal dream vault...',
+  'Curating milestones and moments...',
+  'Aligning horizons and adventures...',
+  'Polishing your life journey roadmap...',
+  'Almost ready to make it happen...',
+];
 
-// Add raw keyframe styling to document head if not exists
-if (typeof document !== 'undefined') {
-  const styleId = 'spinner-keyframes';
-  if (!document.getElementById(styleId)) {
-    const styleSheet = document.createElement('style');
-    styleSheet.id = styleId;
-    styleSheet.innerText = `
-      @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-      }
-    `;
-    document.head.appendChild(styleSheet);
+export default function LoadingSpinner({
+  fullScreen = false,
+  message,
+  submessage,
+  compact = false,
+}: LoadingSpinnerProps) {
+  const [msgIndex, setMsgIndex] = useState(0);
+  const [fade, setFade] = useState(true);
+
+  useEffect(() => {
+    if (message) return;
+
+    const interval = setInterval(() => {
+      setFade(false);
+      setTimeout(() => {
+        setMsgIndex((prev) => (prev + 1) % DYNAMIC_MESSAGES.length);
+        setFade(true);
+      }, 250);
+    }, 2400);
+
+    return () => clearInterval(interval);
+  }, [message]);
+
+  const activeMessage = message || DYNAMIC_MESSAGES[msgIndex];
+
+  if (compact) {
+    return (
+      <div className="dynamic-loader-compact" role="status" aria-label="Loading">
+        <div className="loader-compact-ring">
+          <div className="loader-compact-dot" />
+        </div>
+        {activeMessage && <span className="loader-compact-text">{activeMessage}</span>}
+      </div>
+    );
   }
+
+  return (
+    <div
+      className={`dynamic-loader-wrapper ${fullScreen ? 'loader-fullscreen' : 'loader-inline'}`}
+      role="status"
+      aria-label="Loading dream list"
+    >
+      {/* Ambient background glow aura */}
+      <div className="loader-ambient-glow" />
+
+      {/* Dynamic kinetic core & orbital rings */}
+      <div className="loader-stage-container">
+        <div className="loader-orbit loader-orbit-outer">
+          <div className="loader-orbiter orbiter-1" />
+        </div>
+        <div className="loader-orbit loader-orbit-middle">
+          <div className="loader-orbiter orbiter-2" />
+        </div>
+        <div className="loader-orbit loader-orbit-inner">
+          <div className="loader-orbiter orbiter-3" />
+        </div>
+
+        {/* Central glowing badge */}
+        <div className="loader-central-badge">
+          <div className="loader-central-pulse" />
+          <svg
+            className="loader-central-icon"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+          </svg>
+        </div>
+      </div>
+
+      {/* Dynamic Content Details */}
+      <div className="loader-text-area">
+        <div className="loader-status-pill">
+          <span className="loader-status-dot" />
+          <span className="loader-status-tag">Synchronizing</span>
+        </div>
+
+        <h3 className={`loader-title ${fade ? 'fade-enter' : 'fade-exit'}`}>
+          {activeMessage}
+        </h3>
+
+        <p className="loader-subcaption">
+          {submessage || 'Every great chapter begins with a bold vision.'}
+        </p>
+
+        {/* Kinetic Shimmer Progress Track */}
+        <div className="loader-track-bar">
+          <div className="loader-track-indicator" />
+        </div>
+      </div>
+    </div>
+  );
 }
