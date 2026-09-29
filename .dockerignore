@@ -1,6 +1,6 @@
-amplify/
 node_modules/
 dist/
+.amplify/
 .git
 .github
 .env
