@@ -1,0 +1,123 @@
+name: Build and Deploy Bucket List Tracker
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: bucketlist-tracker-web
+  ECS_CLUSTER: bucketlist-cluster
+  ECS_SERVICE: bucketlist-tracker-task-service-9nxjt77m
+  ECS_TASK_DEFINITION: bucketlist-tracker-task
+  CONTAINER_NAME: bucketlist-container
+
+jobs:
+  deploy:
+    name: Build, Push and Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # 1. Download repository code
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      # 2. Configure temporary AWS credentials through OIDC
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::471743302017:role/BucketListGitHubActionsRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      # 3. Verify AWS identity
+      - name: Verify AWS identity
+        run: |
+          aws sts get-caller-identity
+
+      # 4. Install Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      # 5. Install dependencies
+      - name: Install dependencies
+        run: npm install
+
+      # 6. Build React application
+      - name: Build application
+        run: npm run build
+
+      # 7. Login to Amazon ECR
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # 8. Create Docker image tags
+      - name: Set Docker image
+        id: image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "latest=$ECR_REGISTRY/$ECR_REPOSITORY:latest" >> "$GITHUB_OUTPUT"
+
+      # 9. Build Docker image
+      - name: Build Docker image
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+          LATEST: ${{ steps.image.outputs.latest }}
+        run: |
+          docker build \
+            -t "$IMAGE" \
+            -t "$LATEST" \
+            .
+
+      # 10. Push Docker image to ECR
+      - name: Push Docker image
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+          LATEST: ${{ steps.image.outputs.latest }}
+        run: |
+          docker push "$IMAGE"
+          docker push "$LATEST"
+
+      # 11. Download current ECS task definition
+      - name: Download ECS task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition "$ECS_TASK_DEFINITION" \
+            --query taskDefinition \
+            --output json > task-definition.json
+
+      # 12. Replace the container image
+      - name: Update container image
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ steps.image.outputs.image }}
+
+      # 13. Deploy new task definition to ECS
+      - name: Deploy to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+      # 14. Deployment completed
+      - name: Deployment successful
+        run: |
+          echo "Deployment completed successfully!"
+          echo "Application:"
+          echo "http://bucketlist-alb-300816141.us-east-1.elb.amazonaws.com/"
