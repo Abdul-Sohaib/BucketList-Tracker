@@ -24,43 +24,69 @@ jobs:
 
     steps:
 
-      # 1. Download repository code
+      # 1. Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      # 2. Configure temporary AWS credentials through OIDC
+      # 2. DEBUG GitHub OIDC claims
+      # Remove this step after we fix the IAM trust policy.
+      - name: Debug GitHub OIDC claims
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          response="$(curl --fail-with-body --silent --show-error \
+            -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com")"
+
+          token="$(jq -r '.value' <<< "$response")"
+          payload="$(cut -d. -f2 <<< "$token")"
+
+          padding=$((4 - ${#payload} % 4))
+          if [ "$padding" -lt 4 ]; then
+            payload="${payload}$(printf '=%.0s' $(seq 1 "$padding"))"
+          fi
+
+          echo "GitHub OIDC claims (token signature omitted):"
+
+          printf '%s' "$payload" \
+            | tr '_-' '/+' \
+            | base64 --decode 2>/dev/null \
+            | jq '{aud, sub, repository, repository_owner, ref, event_name, job_workflow_ref}'
+
+      # 3. Configure temporary AWS credentials through OIDC
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: arn:aws:iam::471743302017:role/BucketListGitHubActionsRole
           aws-region: ${{ env.AWS_REGION }}
 
-      # 3. Verify AWS identity
+      # 4. Verify AWS identity
       - name: Verify AWS identity
         run: |
           aws sts get-caller-identity
 
-      # 4. Install Node.js
+      # 5. Install Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
 
-      # 5. Install dependencies
+      # 6. Install dependencies
       - name: Install dependencies
         run: npm install
 
-      # 6. Build React application
+      # 7. Build React application
       - name: Build application
         run: npm run build
 
-      # 7. Login to Amazon ECR
+      # 8. Login to Amazon ECR
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # 8. Create Docker image tags
+      # 9. Create Docker image tags
       - name: Set Docker image
         id: image
         env:
@@ -69,7 +95,7 @@ jobs:
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
           echo "latest=$ECR_REGISTRY/$ECR_REPOSITORY:latest" >> "$GITHUB_OUTPUT"
 
-      # 9. Build Docker image
+      # 10. Build Docker image
       - name: Build Docker image
         env:
           IMAGE: ${{ steps.image.outputs.image }}
@@ -80,7 +106,7 @@ jobs:
             -t "$LATEST" \
             .
 
-      # 10. Push Docker image to ECR
+      # 11. Push Docker image to ECR
       - name: Push Docker image
         env:
           IMAGE: ${{ steps.image.outputs.image }}
@@ -89,7 +115,7 @@ jobs:
           docker push "$IMAGE"
           docker push "$LATEST"
 
-      # 11. Download current ECS task definition
+      # 12. Download current ECS task definition
       - name: Download ECS task definition
         run: |
           aws ecs describe-task-definition \
@@ -97,7 +123,7 @@ jobs:
             --query taskDefinition \
             --output json > task-definition.json
 
-      # 12. Replace the container image
+      # 13. Replace container image
       - name: Update container image
         id: task-def
         uses: aws-actions/amazon-ecs-render-task-definition@v1
@@ -106,7 +132,7 @@ jobs:
           container-name: ${{ env.CONTAINER_NAME }}
           image: ${{ steps.image.outputs.image }}
 
-      # 13. Deploy new task definition to ECS
+      # 14. Deploy new task definition to ECS
       - name: Deploy to ECS
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
@@ -115,7 +141,7 @@ jobs:
           cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
 
-      # 14. Deployment completed
+      # 15. Deployment completed
       - name: Deployment successful
         run: |
           echo "Deployment completed successfully!"
