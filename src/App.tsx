@@ -46,7 +46,6 @@ function App() {
     const restoreSession = async () => {
       try {
         const currentUser = await getCurrentUser();
-        console.log('User still signed in:', currentUser);
 
         let attributes: Record<string, string | undefined> = {};
 
@@ -77,17 +76,14 @@ function App() {
           email,
           username,
           preferred_username,
-          bio: 'Explorer of life, collector of experiences. Let\'s check off this list!',
-          joinedDate: new Date()
-            .toISOString()
-            .split('T')[0],
+          bio: attributes['custom:bio'] || attributes.bio || '',
+          joinedDate: new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
           avatarUrl:
-            'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&h=150&q=80',
+            'https://lh3.googleusercontent.com/aida-public/AB6AXuCuRFpEHAdtVSPlvvfDTmOQFG6uIg7bxVFr90WYN-XU6-sep49l7iTqnGuhLYVg56evbuBptsgAjw4IzI8-DIoj4DYI-Ow-zBptWg1fjGX-mcdY7XQvzypVauAxEmN2f2C9q9dV1R2Fk1RvIZfJ7mvWrIRhJZRAKBO2L6LfrYqeE3t_HRXhCsI4WDUFM1IYaiD-VMK0PdTDtTdEa2kSfpSjeM1ChA6lG5VWYb9yABf0NYOyzCvPpke5',
         };
 
         setUser(restoredUser);
       } catch (authError) {
-        console.log('No user signed in');
         setUser(null);
       } finally {
         setSessionLoading(false);
@@ -257,8 +253,8 @@ function App() {
       return (
         <LoadingSpinner
           fullScreen={true}
-          message="Verifying your account session..."
-          submessage="Connecting to DreamQuest secure vault."
+          message="Verifying your naturalist field account..."
+          submessage="Connecting to DreamQuest archival cloud vault."
         />
       );
     }
@@ -277,7 +273,8 @@ function App() {
       return (
         <LoadingSpinner
           fullScreen={false}
-          submessage="Retrieving your life goals and achievements."
+          message="Retrieving your cataloged horizons..."
+          submessage="Loading field monograph entries and milestones."
         />
       );
     }
@@ -286,6 +283,7 @@ function App() {
       case 'dashboard':
         return (
           <Dashboard
+            user={user}
             items={items}
             onToggleComplete={toggleComplete}
             onDelete={deleteBucketItem}
@@ -341,13 +339,7 @@ function App() {
   // --------------------------------------------------
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        minHeight: '100vh',
-      }}
-    >
+    <div className="app-container">
       {/* Show Navbar only when logged in */}
       {user && (
         <Navbar
@@ -358,12 +350,7 @@ function App() {
         />
       )}
 
-      <main
-        style={{
-          flexGrow: 1,
-          paddingTop: user ? '20px' : '0',
-        }}
-      >
+      <main className={user ? 'main-content' : ''}>
         {renderPage()}
       </main>
     </div>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { User } from '../types/bucket';
+import CompassEmblem from './CompassEmblem';
 
 interface NavbarProps {
   currentRoute: string;
@@ -9,7 +10,7 @@ interface NavbarProps {
 }
 
 const getCleanDisplayName = (u: User | null): string => {
-  if (!u) return '';
+  if (!u) return 'Elena Vance';
   if (u.preferred_username && u.preferred_username.trim()) {
     return u.preferred_username.trim();
   }
@@ -20,122 +21,144 @@ const getCleanDisplayName = (u: User | null): string => {
   if (u.email) {
     return u.email.split('@')[0];
   }
-  return 'Explorer';
+  return 'Elena Vance';
 };
 
 export default function Navbar({ currentRoute, setRoute, user, onLogout }: NavbarProps) {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  if (!user) return null; // Don't show navbar if user is not logged in
+  if (!user) return null;
 
   const displayName = getCleanDisplayName(user);
+  const avatarUrl = user.avatarUrl || 'https://lh3.googleusercontent.com/aida-public/AB6AXuCuRFpEHAdtVSPlvvfDTmOQFG6uIg7bxVFr90WYN-XU6-sep49l7iTqnGuhLYVg56evbuBptsgAjw4IzI8-DIoj4DYI-Ow-zBptWg1fjGX-mcdY7XQvzypVauAxEmN2f2C9q9dV1R2Fk1RvIZfJ7mvWrIRhJZRAKBO2L6LfrYqeE3t_HRXhCsI4WDUFM1IYaiD-VMK0PdTDtTdEa2kSfpSjeM1ChA6lG5VWYb9yABf0NYOyzCvPpke5';
 
-  const handleNavClick = (e: React.MouseEvent, route: string) => {
-    e.preventDefault();
+  const handleNav = (route: string) => {
     setRoute(route);
-    setIsMenuOpen(false); // Close mobile menu on click
+    setIsMobileMenuOpen(false);
   };
 
   return (
-    <nav className="navbar glass-panel">
-      <div className="navbar-container">
-        {/* Brand Logo */}
-        <div className="navbar-brand" onClick={(e) => handleNavClick(e, 'dashboard')}>
-          <div className="navbar-logo">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-            </svg>
+    <>
+      <header className="dq-header">
+        <div className="dq-header-container">
+          {/* Brand Logo & Editorial Title */}
+          <div className="dq-brand" onClick={() => handleNav('dashboard')}>
+            <CompassEmblem size={32} />
+            <div className="dq-brand-info">
+              <span className="dq-brand-title">DreamQuest</span>
+              <span className="dq-brand-subtitle">Life Journey &amp; Vault</span>
+            </div>
           </div>
-          <span className="navbar-brand-text">DreamQuest</span>
-        </div>
 
-        {/* Links Navigation */}
-        <div className={`navbar-links ${isMenuOpen ? 'navbar-links-open' : ''}`}>
+          {/* Desktop Navigation Pills */}
+          <nav className="dq-nav-pills" aria-label="Main Navigation">
+            <a
+              href="#dashboard"
+              onClick={(e) => { e.preventDefault(); handleNav('dashboard'); }}
+              className={`dq-nav-item ${currentRoute === 'dashboard' ? 'active' : ''}`}
+            >
+              Dashboard
+            </a>
+            <a
+              href="#create"
+              onClick={(e) => { e.preventDefault(); handleNav('create'); }}
+              className={`dq-nav-item ${currentRoute === 'create' ? 'active' : ''}`}
+            >
+              Add Dream
+            </a>
+            <a
+              href="#profile"
+              onClick={(e) => { e.preventDefault(); handleNav('profile'); }}
+              className={`dq-nav-item ${currentRoute === 'profile' ? 'active' : ''}`}
+            >
+              Profile &amp; Vault
+            </a>
+          </nav>
+
+          {/* Header Right Actions */}
+          <div className="dq-header-actions">
+
+            {/* Profile Avatar Pill */}
+            <div
+              className="dq-user-profile-badge"
+              onClick={() => handleNav('profile')}
+              title="View Explorer Dossier"
+            >
+              <img
+                src={avatarUrl}
+                alt={displayName}
+                className="dq-avatar-img"
+              />
+              <div className="dq-user-meta">
+                <span className="dq-user-name">{displayName}</span>
+                <span className="dq-user-rank">Master Voyager</span>
+              </div>
+            </div>
+
+            {/* Exit / Logout Action */}
+            <button
+              type="button"
+              className="dq-exit-btn"
+              onClick={onLogout}
+              title="Exit Ledger Terminal"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>logout</span>
+              <span>Exit</span>
+            </button>
+
+            {/* Mobile Hamburger Menu Toggle */}
+            <button
+              type="button"
+              className="dq-mobile-toggle"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              aria-label="Toggle Navigation Menu"
+            >
+              <span className="material-symbols-outlined">
+                {isMobileMenuOpen ? 'close' : 'menu'}
+              </span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* Mobile Menu Dropdown */}
+      {isMobileMenuOpen && (
+        <div className="dq-mobile-drawer">
           <a
             href="#dashboard"
-            onClick={(e) => handleNavClick(e, 'dashboard')}
-            className={`navbar-link ${currentRoute === 'dashboard' ? 'navbar-link-active' : ''}`}
+            onClick={(e) => { e.preventDefault(); handleNav('dashboard'); }}
+            className={`dq-nav-item ${currentRoute === 'dashboard' ? 'active' : ''}`}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="7" height="9" />
-              <rect x="14" y="3" width="7" height="5" />
-              <rect x="14" y="12" width="7" height="9" />
-              <rect x="3" y="16" width="7" height="5" />
-            </svg>
+            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>dashboard</span>
             Dashboard
           </a>
-
           <a
             href="#create"
-            onClick={(e) => handleNavClick(e, 'create')}
-            className={`navbar-link ${currentRoute === 'create' ? 'navbar-link-active' : ''}`}
+            onClick={(e) => { e.preventDefault(); handleNav('create'); }}
+            className={`dq-nav-item ${currentRoute === 'create' ? 'active' : ''}`}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="16" />
-              <line x1="8" y1="12" x2="16" y2="12" />
-            </svg>
+            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>add_circle</span>
             Add Dream
           </a>
-
           <a
             href="#profile"
-            onClick={(e) => handleNavClick(e, 'profile')}
-            className={`navbar-link ${currentRoute === 'profile' ? 'navbar-link-active' : ''}`}
+            onClick={(e) => { e.preventDefault(); handleNav('profile'); }}
+            className={`dq-nav-item ${currentRoute === 'profile' ? 'active' : ''}`}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-              <circle cx="12" cy="7" r="4" />
-            </svg>
-            Profile
+            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>account_circle</span>
+            Profile &amp; Vault
           </a>
-        </div>
-
-        {/* User Info, Logout & Hamburger Toggle */}
-        <div className="navbar-user-section">
-          <div className="navbar-user-info" onClick={(e) => handleNavClick(e, 'profile')}>
-            <img
-              src={user.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&h=100&q=80'}
-              alt={displayName}
-              className="navbar-avatar"
-            />
-            <span className="navbar-username">{displayName}</span>
-          </div>
-
           <button
-            className="btn btn-secondary navbar-logout-btn"
+            type="button"
+            className="dq-nav-item"
+            style={{ color: 'var(--error)', marginTop: '0.5rem', justifyContent: 'flex-start', width: '100%', background: 'transparent', border: 'none' }}
             onClick={onLogout}
-            title="Log out"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
-            </svg>
-            <span>Exit</span>
-          </button>
-
-          {/* Hamburger Trigger for Mobile */}
-          <button
-            className="navbar-hamburger"
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-            aria-label="Toggle menu"
-          >
-            {isMenuOpen ? (
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            ) : (
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="3" y1="12" x2="21" y2="12" />
-                <line x1="3" y1="6" x2="21" y2="6" />
-                <line x1="3" y1="18" x2="21" y2="18" />
-              </svg>
-            )}
+            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>logout</span>
+            Exit Terminal
           </button>
         </div>
-      </div>
-    </nav>
+      )}
+    </>
   );
 }

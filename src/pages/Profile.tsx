@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { User, BucketItem } from '../types/bucket';
 import { updateUserAttributes, fetchUserAttributes } from 'aws-amplify/auth';
+import { AVATAR_ARCHETYPES } from '../utils/sampleData';
 
 interface ProfileProps {
   user: User | null;
@@ -8,17 +9,8 @@ interface ProfileProps {
   onUpdateProfile: (updatedUser: User) => void;
 }
 
-const AVATAR_OPTIONS = [
-  'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&h=150&q=80', // Default Explorer Male
-  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&h=150&q=80', // Explorer Female
-  'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=150&h=150&q=80', // Corporate / Sleek
-  'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=150&h=150&q=80', // Casual Female
-  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&h=150&q=80', // Adventurer Male
-];
-
-// Helper to extract a friendly display name (never showing raw Cognito UUIDs)
 const getCleanDisplayName = (u: User | null): string => {
-  if (!u) return '';
+  if (!u) return 'Explorer';
   if (u.preferred_username && u.preferred_username.trim()) {
     return u.preferred_username.trim();
   }
@@ -33,22 +25,50 @@ const getCleanDisplayName = (u: User | null): string => {
 };
 
 export default function Profile({ user, items, onUpdateProfile }: ProfileProps) {
-  const [isEditing, setIsEditing] = useState(false);
+  const [isAvatarTrayOpen, setIsAvatarTrayOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
   const [username, setUsername] = useState(getCleanDisplayName(user));
   const [bio, setBio] = useState(user?.bio || '');
-  const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl || AVATAR_OPTIONS[0]);
+  const [location, setLocation] = useState('Global Wayfarer');
+  const [avatarUrl, setAvatarUrl] = useState(
+    user?.avatarUrl || AVATAR_ARCHETYPES[0].url
+  );
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  // Keep state in sync whenever user prop changes
+  const activeItems = items;
+
+  const total = activeItems.length;
+  const completed = activeItems.filter((i) => i.completed).length;
+  const inProgress = total - completed;
+  const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+  const urgentHighCount = activeItems.filter((i) => !i.completed && (i.priority || '').toUpperCase() === 'HIGH').length;
+  const mediumCount = activeItems.filter((i) => !i.completed && (i.priority || '').toUpperCase() === 'MEDIUM').length;
+  const lowCount = activeItems.filter((i) => !i.completed && (i.priority || '').toUpperCase() === 'LOW').length;
+
+  const categoryCounts = activeItems.reduce<Record<string, number>>((acc, item) => {
+    const cat = item.category?.trim() || 'General';
+    acc[cat] = (acc[cat] || 0) + 1;
+    return acc;
+  }, {});
+
+  const categoryEntries = Object.entries(categoryCounts).map(([cat, count]) => ({
+    category: cat,
+    count,
+    percentage: total > 0 ? Math.round((count / total) * 100) : 0,
+  })).sort((a, b) => b.count - a.count);
+
   useEffect(() => {
     if (user) {
       setUsername(getCleanDisplayName(user));
-      setBio(user.bio || '');
-      setAvatarUrl(user.avatarUrl || AVATAR_OPTIONS[0]);
+      if (user.bio !== undefined) setBio(user.bio);
+      if (user.avatarUrl) setAvatarUrl(user.avatarUrl);
     }
   }, [user]);
 
-  // Query Cognito attributes directly on component mount to guarantee latest preferred_username
+  // Query Cognito attributes
   useEffect(() => {
     let isMounted = true;
     const loadAttributes = async () => {
@@ -66,7 +86,7 @@ export default function Profile({ user, items, onUpdateProfile }: ProfileProps) 
           }
         }
       } catch (err) {
-        console.warn('Could not load Cognito user attributes in Profile:', err);
+        console.warn('Could not fetch Cognito attributes:', err);
       }
     };
 
@@ -76,221 +96,559 @@ export default function Profile({ user, items, onUpdateProfile }: ProfileProps) 
     };
   }, []);
 
-  if (!user) return null;
-
-  const displayName = getCleanDisplayName(user);
-
-  // Derive stats
-  const total = items.length;
-  const completed = items.filter(item => item.completed).length;
-  const active = total - completed;
-  const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
-
-  // Group by category to find favorite category
-  const categoryCounts = items.reduce((acc, item) => {
-    acc[item.category] = (acc[item.category] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-
-  let primaryFocus = 'None';
-  let maxCount = 0;
-  Object.entries(categoryCounts).forEach(([cat, count]) => {
-    const num = typeof count === 'number' ? count : Number(count) || 0;
-    if (num > maxCount) {
-      maxCount = num;
-      primaryFocus = cat;
+  const handleSelectAvatar = async (url: string) => {
+    setAvatarUrl(url);
+    if (user) {
+      onUpdateProfile({
+        ...user,
+        avatarUrl: url,
+      });
     }
-  });
+  };
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim()) {
-      setError('Username is required.');
+      setError('Please provide a valid explorer handle.');
       return;
     }
 
     try {
+      setSaving(true);
+      setError('');
+
       try {
         await updateUserAttributes({
           userAttributes: {
             preferred_username: username.trim(),
           },
         });
-      } catch (err) {
-        console.warn('Could not update preferred_username in Cognito:', err);
+      } catch (attrErr) {
+        console.warn('Cognito update attribute notice:', attrErr);
       }
 
-      onUpdateProfile({
-        ...user,
-        username: username.trim(),
-        preferred_username: username.trim(),
-        bio: bio.trim(),
-        avatarUrl,
-      });
-      setIsEditing(false);
-      setError('');
+      if (user) {
+        onUpdateProfile({
+          ...user,
+          username: username.trim(),
+          preferred_username: username.trim(),
+          bio: bio.trim(),
+          avatarUrl,
+        });
+      }
+
+      setIsEditModalOpen(false);
     } catch (err: any) {
-      setError(err?.message || 'Failed to save changes.');
+      setError(err?.message || 'Failed to save profile changes.');
+    } finally {
+      setSaving(false);
     }
   };
 
+  const displayName = getCleanDisplayName(user);
+  const email = user?.email || 'No email registered';
+  const memberSince = user?.joinedDate || 'Recently';
+  const completedItems = activeItems.filter((i) => i.completed);
+
   return (
-    <div className="profile-container fade-in">
-      <div className="profile-grid">
-        
-        {/* Left Side: Profile Card & Bio */}
-        <div className="profile-col-left">
-          <div className="glass-panel profile-card-content">
-            
-            {!isEditing ? (
-              // Normal View Mode
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', width: '100%' }}>
-                <img src={user.avatarUrl} alt={displayName} className="profile-large-avatar" />
-                <h2 className="profile-name">{displayName}</h2>
-                <span className="profile-email">{user.email}</span>
-                <span className="profile-joined">Member since {user.joinedDate}</span>
-                
-                <div className="profile-divider"></div>
-                
-                <h4 className="profile-section-title" style={{ textAlign: 'center' }}>My Biography</h4>
-                <p className="profile-bio-text">{user.bio || "No biography provided yet. Edit your profile to tell your story!"}</p>
-                
-                <button 
-                  className="btn btn-secondary profile-edit-btn" 
-                  onClick={() => {
-                    setUsername(getCleanDisplayName(user));
-                    setBio(user.bio);
-                    setAvatarUrl(user.avatarUrl);
-                    setIsEditing(true);
+    <div className="page-wrapper fade-in">
+      {/* Top Archival Dossier Card */}
+      <section className="dq-card" style={{ padding: '2rem 2.5rem', position: 'relative' }}>
+        <div className="dq-ambient-aura" />
+        <div style={{ position: 'absolute', left: '-3rem', bottom: '-3rem', width: '16rem', height: '16rem', borderRadius: '50%', background: 'radial-gradient(circle, rgba(255, 219, 207, 0.3) 0%, transparent 70%)', filter: 'blur(30px)', pointerEvents: 'none' }} />
+
+        <div style={{ position: 'relative', zIndex: 10, display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1.5rem' }}>
+            {/* Avatar & User Details */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1.75rem', flexWrap: 'wrap' }}>
+              {/* Main Profile Avatar with trigger */}
+              <div
+                style={{ position: 'relative', cursor: 'pointer' }}
+                onClick={() => setIsAvatarTrayOpen(!isAvatarTrayOpen)}
+                title="Click to choose archival portrait archetype"
+              >
+                <div style={{ width: '112px', height: '112px', borderRadius: '50%', overflow: 'hidden', border: '3px solid var(--surface-container-lowest)', boxShadow: 'var(--shadow-lg)' }}>
+                  <img
+                    src={avatarUrl}
+                    alt={displayName}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                </div>
+                <button
+                  type="button"
+                  style={{
+                    position: 'absolute',
+                    bottom: '2px',
+                    right: '2px',
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '50%',
+                    backgroundColor: 'var(--primary)',
+                    color: '#fff',
+                    border: '2px solid #fff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    boxShadow: 'var(--shadow-md)',
                   }}
+                  aria-label="Update Portrait"
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-                  </svg>
-                  Edit Profile
+                  <span className="material-symbols-outlined" style={{ fontSize: '17px' }}>photo_camera</span>
                 </button>
               </div>
-            ) : (
-              // Edit Form Mode
-              <form onSubmit={handleSave} className="profile-form">
-                <h3 className="profile-form-title">Edit Settings</h3>
-                
-                {/* Choose Avatar */}
-                <div className="form-group">
-                  <label className="form-label">Select Avatar</label>
-                  <div className="profile-avatar-selection">
-                    {AVATAR_OPTIONS.map((url, idx) => (
-                      <img
-                        key={idx}
-                        src={url}
-                        alt="Avatar Option"
-                        onClick={() => setAvatarUrl(url)}
-                        className={`profile-avatar-option ${avatarUrl === url ? 'profile-active-avatar' : ''}`}
+
+              {/* Name, Handle & Bio */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', maxWidth: '38rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <h1 className="font-headline-md" style={{ color: 'var(--primary)' }}>
+                    {displayName}
+                  </h1>
+                  <span className="font-label-md" style={{ color: 'var(--on-surface-variant)' }}>
+                    @{username.toLowerCase().replace(/\s+/g, '_')}
+                  </span>
+                  <span style={{ padding: '2px 8px', borderRadius: '9999px', fontSize: '10px', fontWeight: 700, backgroundColor: 'var(--primary-container)', color: 'var(--on-primary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    Active Explorer
+                  </span>
+                </div>
+
+                <p className="font-body-md" style={{ color: 'var(--on-surface-variant)', lineHeight: '1.5' }}>
+                  {bio || 'Documenting life aspirations, expeditions, and quiet personal triumphs.'}
+                </p>
+
+                {/* Metadata Badges */}
+                <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.35rem' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.25rem 0.65rem', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--surface-container-low)', color: 'var(--on-surface-variant)', fontSize: '12px' }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: '15px', color: 'var(--primary)' }}>calendar_today</span>
+                    Member since {memberSince}
+                  </span>
+                  {email && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.25rem 0.65rem', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--surface-container-low)', color: 'var(--on-surface-variant)', fontSize: '12px' }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: '15px', color: 'var(--secondary)' }}>mail</span>
+                      {email}
+                    </span>
+                  )}
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.25rem 0.65rem', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--surface-container-low)', color: 'var(--on-surface-variant)', fontSize: '12px' }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: '15px', color: 'var(--outline)' }}>location_on</span>
+                    {location}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Action CTAs */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <button
+                type="button"
+                className="btn-dq-primary"
+                onClick={() => setIsEditModalOpen(true)}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>edit_note</span>
+                <span>Edit Profile Info</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Avatar Selector Tray (Collapsible Drawer) */}
+          {isAvatarTrayOpen && (
+            <div
+              style={{
+                marginTop: '1rem',
+                paddingTop: '1.25rem',
+                backgroundColor: 'var(--surface-container-low)',
+                borderRadius: 'var(--radius-xl)',
+                padding: '1.25rem 1.5rem',
+                border: '1px solid rgba(216, 228, 220, 0.8)',
+              }}
+              className="fade-in"
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                <div>
+                  <h2 className="font-title-lg" style={{ color: 'var(--primary)' }}>
+                    Archival Expedition Portraits
+                  </h2>
+                  <p className="font-body-sm" style={{ color: 'var(--on-surface-variant)' }}>
+                    Select an authenticated field avatar archetype from the naturalist archives.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAvatarTrayOpen(false)}
+                  style={{ background: 'none', border: 'none', color: 'var(--on-surface-variant)', cursor: 'pointer', display: 'flex' }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>close</span>
+                </button>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '1rem' }}>
+                {AVATAR_ARCHETYPES.map((archetype) => {
+                  const isSelected = avatarUrl === archetype.url;
+                  return (
+                    <div
+                      key={archetype.id}
+                      onClick={() => handleSelectAvatar(archetype.url)}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        cursor: 'pointer',
+                        padding: '0.5rem',
+                        borderRadius: 'var(--radius-lg)',
+                        backgroundColor: isSelected ? 'var(--surface-container-lowest)' : 'transparent',
+                        border: isSelected ? '1.5px solid var(--primary)' : '1.5px solid transparent',
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: '60px',
+                          height: '60px',
+                          borderRadius: '50%',
+                          overflow: 'hidden',
+                          border: isSelected ? '2px solid var(--primary)' : '2px solid var(--outline-variant)',
+                        }}
+                      >
+                        <img
+                          src={archetype.url}
+                          alt={archetype.name}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                      </div>
+                      <span
+                        className="font-label-sm"
+                        style={{
+                          color: isSelected ? 'var(--primary)' : 'var(--on-surface-variant)',
+                          fontWeight: isSelected ? 700 : 500,
+                          textAlign: 'center',
+                        }}
+                      >
+                        {archetype.role}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Explorer Lifetime Analytics & Milestone Breakdown */}
+      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem' }}>
+        {/* 3 Stat Metric Cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem' }}>
+          <div className="dq-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span className="font-label-md" style={{ color: 'var(--on-surface-variant)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Dreams Realized
+              </span>
+              <span style={{ padding: '6px', borderRadius: '8px', backgroundColor: 'var(--primary-fixed)', color: 'var(--primary)', display: 'flex' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>task_alt</span>
+              </span>
+            </div>
+            <div style={{ marginTop: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem' }}>
+                <span className="font-display" style={{ color: 'var(--primary)', lineHeight: 1, fontSize: '42px' }}>{completed}</span>
+                <span className="font-label-md" style={{ color: 'var(--on-surface-variant)' }}>/ {total} registered</span>
+              </div>
+              <p className="font-body-sm" style={{ color: 'var(--on-surface-variant)', marginTop: '0.25rem' }}>Completed ambitions archived</p>
+            </div>
+          </div>
+
+          <div className="dq-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span className="font-label-md" style={{ color: 'var(--on-surface-variant)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Active Horizons
+              </span>
+              <span style={{ padding: '6px', borderRadius: '8px', backgroundColor: 'var(--secondary-fixed)', color: 'var(--on-secondary-fixed)', display: 'flex' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>explore</span>
+              </span>
+            </div>
+            <div style={{ marginTop: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem' }}>
+                <span className="font-display" style={{ color: 'var(--secondary)', lineHeight: 1, fontSize: '42px' }}>{inProgress}</span>
+                <span className="font-label-md" style={{ color: 'var(--on-surface-variant)' }}>in progress</span>
+              </div>
+              <p className="font-body-sm" style={{ color: 'var(--on-surface-variant)', marginTop: '0.25rem' }}>Expeditions in active flight</p>
+            </div>
+          </div>
+
+          <div className="dq-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span className="font-label-md" style={{ color: 'var(--on-surface-variant)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Success Rate
+              </span>
+              <span style={{ padding: '6px', borderRadius: '8px', backgroundColor: 'var(--surface-container-high)', color: 'var(--primary)', display: 'flex' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>insights</span>
+              </span>
+            </div>
+            <div style={{ marginTop: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem' }}>
+                <span className="font-display" style={{ color: 'var(--primary)', lineHeight: 1, fontSize: '42px' }}>{completionRate}%</span>
+                <span className="font-label-sm" style={{ color: 'var(--secondary)', fontWeight: 700 }}>{completed} of {total}</span>
+              </div>
+              <p className="font-body-sm" style={{ color: 'var(--on-surface-variant)', marginTop: '0.25rem' }}>Completion index of set goals</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Domain Ledger & Priority Urgency Radar */}
+        <div className="dq-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h2 className="font-title-lg" style={{ color: 'var(--primary)' }}>Domain Ledger</h2>
+              <span className="font-label-sm" style={{ textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--on-surface-variant)' }}>
+                {total} Total Ambitions
+              </span>
+            </div>
+
+            {/* Real Segmented Bar Chart */}
+            {categoryEntries.length > 0 ? (
+              <>
+                <div style={{ width: '100%', height: '10px', borderRadius: '9999px', backgroundColor: 'var(--surface-container-highest)', overflow: 'hidden', display: 'flex', margin: '0.75rem 0 1rem' }}>
+                  {categoryEntries.map((c, idx) => {
+                    const colors = [
+                      'var(--primary)',
+                      'var(--secondary)',
+                      'var(--on-tertiary-container)',
+                      'var(--primary-fixed-dim)',
+                      'var(--outline-variant)',
+                    ];
+                    return (
+                      <div
+                        key={c.category}
+                        style={{ height: '100%', width: `${c.percentage}%`, backgroundColor: colors[idx % colors.length] }}
+                        title={`${c.category} ${c.percentage}%`}
                       />
-                    ))}
-                  </div>
+                    );
+                  })}
                 </div>
 
-                <div className="form-group">
-                  <label className="form-label" htmlFor="username">Username</label>
-                  <input
-                    id="username"
-                    type="text"
-                    className="form-input"
-                    value={username}
-                    onChange={(e) => {
-                      setUsername(e.target.value);
-                      if (error) setError('');
-                    }}
-                  />
-                  {error && <span className="form-error">{error}</span>}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                  {categoryEntries.map((c, idx) => {
+                    const colors = [
+                      'var(--primary)',
+                      'var(--secondary)',
+                      'var(--on-tertiary-container)',
+                      'var(--primary-fixed-dim)',
+                      'var(--outline-variant)',
+                    ];
+                    return (
+                      <div key={c.category} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }} className="font-body-sm">
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--on-surface)' }}>
+                          <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: colors[idx % colors.length] }} />
+                          {c.category}
+                        </span>
+                        <span className="font-label-md" style={{ fontWeight: 600, color: colors[idx % colors.length] }}>
+                          {c.count} ({c.percentage}%)
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
-
-                <div className="form-group">
-                  <label className="form-label" htmlFor="bio">Biography</label>
-                  <textarea
-                    id="bio"
-                    className="form-input profile-textarea"
-                    value={bio}
-                    onChange={(e) => setBio(e.target.value)}
-                    placeholder="Tell us about yourself and your dreams..."
-                  />
-                </div>
-
-                <div className="profile-form-actions">
-                  <button 
-                    type="button" 
-                    className="btn btn-secondary profile-form-btn" 
-                    onClick={() => {
-                      setIsEditing(false);
-                      setUsername(getCleanDisplayName(user));
-                      setBio(user.bio);
-                      setAvatarUrl(user.avatarUrl);
-                      setError('');
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button type="submit" className="btn btn-primary profile-form-btn">
-                    Save Changes
-                  </button>
-                </div>
-              </form>
+              </>
+            ) : (
+              <p className="font-body-sm" style={{ color: 'var(--on-surface-variant)', margin: '1rem 0' }}>
+                No categories recorded yet. Add goals in your ledger to analyze domain allocations.
+              </p>
             )}
           </div>
-        </div>
 
-        {/* Right Side: Stats Details */}
-        <div className="profile-col-right">
-          <div className="glass-panel profile-stats-card">
-            <h3 className="progress-header" style={{ marginBottom: '24px' }}>Adventure Statistics</h3>
-            
-            <div className="profile-analytics-grid" style={{ marginBottom: '24px' }}>
-              <div className="profile-analytic-box">
-                <span className="profile-analytic-label">Dreams Completed</span>
-                <span className="profile-analytic-val" style={{ color: 'var(--color-success)' }}>{completed}</span>
-              </div>
-              <div className="profile-analytic-box">
-                <span className="profile-analytic-label">Pending Quests</span>
-                <span className="profile-analytic-val" style={{ color: 'var(--color-info)' }}>{active}</span>
-              </div>
-              <div className="profile-analytic-box">
-                <span className="profile-analytic-label">Total Tracked</span>
-                <span className="profile-analytic-val">{total}</span>
-              </div>
-              <div className="profile-analytic-box">
-                <span className="profile-analytic-label">Achievement Rate</span>
-                <span className="profile-analytic-val" style={{ color: 'var(--color-success)' }}>{completionRate}%</span>
-              </div>
+          {/* Priority Urgency Radar */}
+          <div
+            style={{
+              marginTop: '1rem',
+              padding: '0.75rem',
+              backgroundColor: 'var(--surface-container-low)',
+              borderRadius: 'var(--radius-md)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-around',
+              textAlign: 'center',
+            }}
+          >
+            <div>
+              <span className="font-label-sm" style={{ color: 'var(--secondary)', fontWeight: 700, textTransform: 'uppercase' }}>Urgent / High</span>
+              <span className="font-title-md" style={{ display: 'block', color: 'var(--secondary)' }}>{urgentHighCount} Active</span>
             </div>
-
-            <div className="profile-divider"></div>
-
-            <div style={{ marginBottom: '24px' }}>
-              <h4 className="profile-section-title" style={{ fontSize: '0.9rem', marginBottom: '12px' }}>Primary Focus Category</h4>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', backgroundColor: 'rgba(129, 140, 248, 0.08)', border: '1px solid rgba(129, 140, 248, 0.15)', borderRadius: '12px', padding: '16px 20px' }}>
-                <div style={{ width: '44px', height: '44px', borderRadius: '10px', backgroundColor: 'var(--color-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(129, 140, 248, 0.3)' }}>
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polygon points="12 2 2 22 22 22" />
-                  </svg>
-                </div>
-                <div>
-                  <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.25rem', fontWeight: '700', color: '#ffffff' }}>{primaryFocus}</div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Based on {maxCount} list item{maxCount !== 1 ? 's' : ''}</div>
-                </div>
-              </div>
+            <div style={{ width: '1px', height: '24px', backgroundColor: 'var(--outline-variant)' }} />
+            <div>
+              <span className="font-label-sm" style={{ color: 'var(--on-tertiary-container)', fontWeight: 700, textTransform: 'uppercase' }}>Medium</span>
+              <span className="font-title-md" style={{ display: 'block', color: 'var(--on-tertiary-container)' }}>{mediumCount} In Flight</span>
             </div>
-
-            <div style={{ backgroundColor: 'rgba(0, 0, 0, 0.15)', borderLeft: '4px solid var(--color-secondary)', borderRadius: '0 12px 12px 0', padding: '20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <p style={{ fontSize: '0.925rem', fontStyle: 'italic', color: '#d1d5db', lineHeight: '1.5' }}>
-                "The biggest adventure you can take is to live the life of your dreams."
-              </p>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: '600', textAlign: 'right' }}>— Oprah Winfrey</span>
+            <div style={{ width: '1px', height: '24px', backgroundColor: 'var(--outline-variant)' }} />
+            <div>
+              <span className="font-label-sm" style={{ color: 'var(--on-surface-variant)', fontWeight: 700, textTransform: 'uppercase' }}>Steady / Low</span>
+              <span className="font-title-md" style={{ display: 'block', color: 'var(--primary)' }}>{lowCount} Horizon</span>
             </div>
           </div>
         </div>
+      </section>
 
-      </div>
+      {/* The Vault of Realized Dreams (Timeline Section) */}
+      <section style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <span className="material-symbols-outlined" style={{ color: 'var(--secondary)', fontSize: '24px' }}>workspace_premium</span>
+              <span className="font-label-sm" style={{ textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--secondary)', fontWeight: 700 }}>
+                Physical Ledger Records
+              </span>
+            </div>
+            <h2 className="font-headline-md" style={{ color: 'var(--primary)' }}>
+              The Vault of Realized Dreams
+            </h2>
+          </div>
+          <p className="font-body-sm" style={{ color: 'var(--on-surface-variant)', maxWidth: '24rem' }}>
+            Archived triumphs sealed with golden wax stamps, preserved reflections, and milestone artifacts.
+          </p>
+        </div>
+
+        {/* Real Timeline Cards */}
+        {completedItems.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {completedItems.map((item) => (
+              <article key={item.id} className="dq-card" style={{ padding: '1.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1.25rem', flexWrap: 'wrap' }}>
+                  <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: 'var(--primary-container)', color: 'var(--on-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: '28px', color: 'var(--primary-fixed)' }}>check_circle</span>
+                  </div>
+                  <div style={{ flex: 1, minWidth: '240px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <span className="dq-badge-category">{item.category || 'General'}</span>
+                      {item.targetDate && (
+                        <span className="font-label-sm" style={{ color: 'var(--primary)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>verified</span>
+                          {new Date(item.targetDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="font-headline-sm" style={{ color: 'var(--primary)', marginTop: '0.25rem' }}>
+                      {item.title}
+                    </h3>
+                    {item.description && (
+                      <blockquote style={{ margin: '0.5rem 0', padding: '0.75rem 1rem', backgroundColor: 'var(--surface-container-low)', borderRadius: 'var(--radius-md)', fontStyle: 'italic', color: 'var(--on-surface)', lineHeight: 1.5 }} className="font-body-sm">
+                        “{item.description}”
+                      </blockquote>
+                    )}
+                    {item.targetDate && (
+                      <span className="font-label-md" style={{ color: 'var(--on-surface-variant)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: '16px', color: 'var(--primary)' }}>event_available</span>
+                        Accomplished: {new Date(item.targetDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="dq-card" style={{ padding: '3rem 2rem', textAlign: 'center' }}>
+            <span className="material-symbols-outlined" style={{ fontSize: '40px', color: 'var(--outline)', marginBottom: '0.5rem' }}>
+              lock_clock
+            </span>
+            <h3 className="font-title-lg" style={{ color: 'var(--primary)' }}>
+              No Realized Dreams Yet
+            </h3>
+            <p className="font-body-md" style={{ color: 'var(--on-surface-variant)', maxWidth: '420px', margin: '0.35rem auto' }}>
+              When you achieve and mark aspirations complete in your ledger, their archived certificates and field reflections will be preserved here.
+            </p>
+          </div>
+        )}
+      </section>
+
+      {/* Edit Profile Modal */}
+      {isEditModalOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 100,
+            backgroundColor: 'rgba(3, 37, 29, 0.45)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+          }}
+          className="fade-in"
+        >
+          <div className="dq-card" style={{ maxWidth: '520px', width: '100%', padding: '2rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
+              <h2 className="font-headline-sm" style={{ color: 'var(--primary)' }}>
+                Edit Explorer Profile
+              </h2>
+              <button
+                type="button"
+                onClick={() => setIsEditModalOpen(false)}
+                style={{ background: 'none', border: 'none', color: 'var(--on-surface-variant)', cursor: 'pointer' }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>close</span>
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {error && (
+                <div style={{ padding: '0.5rem 0.75rem', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--error-container)', color: 'var(--on-error-container)', fontSize: '13px' }}>
+                  {error}
+                </div>
+              )}
+
+              <div className="dq-form-group">
+                <label className="dq-form-label">Explorer Handle</label>
+                <input
+                  type="text"
+                  className="dq-input-text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="e.g. Elena Vance"
+                  required
+                />
+              </div>
+
+              <div className="dq-form-group">
+                <label className="dq-form-label">Field Station Location</label>
+                <input
+                  type="text"
+                  className="dq-input-text"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="e.g. Boulder, Colorado"
+                />
+              </div>
+
+              <div className="dq-form-group">
+                <label className="dq-form-label">Personal Monograph Bio</label>
+                <textarea
+                  rows={3}
+                  className="dq-textarea"
+                  value={bio}
+                  onChange={(e) => setBio(e.target.value)}
+                  placeholder="Tell your fellow wayfarers about your journeys..."
+                />
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
+                <button
+                  type="button"
+                  className="btn-dq-secondary"
+                  onClick={() => setIsEditModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-dq-primary"
+                  disabled={saving}
+                >
+                  {saving ? 'Updating...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
